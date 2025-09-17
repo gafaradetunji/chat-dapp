@@ -1,51 +1,79 @@
 "use client"
-import { Group as GroupIcon, Menu as MenuIcon, Send } from "@mui/icons-material";
-import { Alert, AppBar, Avatar, Badge, Box, Drawer, IconButton, List, ListItem, ListItemAvatar, ListItemButton, ListItemText, Paper, Stack, TextField, Toolbar, Typography, useMediaQuery } from "@mui/material";
+import { useGetPrivateMessages, useGetUsers, useSendPrivateMessages, useUploadMessages } from "@/common";
+import { Menu as MenuIcon, Send } from "@mui/icons-material";
+import { Alert, AppBar, Avatar, Box, CircularProgress, Drawer, IconButton, List, ListItem, ListItemAvatar, ListItemButton, ListItemText, Paper, Stack, TextField, Toolbar, Typography, useMediaQuery } from "@mui/material";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { IPFSMessage } from "./ui/component";
+
+
 
 export const ChatApp = () => {
-  // Mocked users
-  const users = ['Alice', 'Bob', 'Charlie'];
-
-  // Add global "Room" chat
-  const chats = ['Room', ...users];
-
+  const allUser = useGetUsers();
   const [selectedChat, setSelectedChat] = useState('Room');
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [messagesByChat, setMessagesByChat] = useState<Record<string, any[]>>({
-    Room: [
-      { id: 1, text: "Welcome to the Room 🎉", sender: 'system', timestamp: new Date() },
-    ],
-    Alice: [
-      { id: 1, text: "Hey Alice 👋", sender: 'me', timestamp: new Date() },
-    ],
-    Bob: [],
-    Charlie: [],
-  });
-
   const [message, setMessage] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const isMobile = useMediaQuery('(max-width:600px)');
+  const { uploadMessages } = useUploadMessages()
+  const { sendPrivateMessage } = useSendPrivateMessages()
+  const { getPrivateMessages } = useGetPrivateMessages()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [toMessages, setToMessages] = useState<any[]>([]);
+  // console.log("Content hash", {
+  //   content: `https://ipfs.io/ipfs/${toMessages[0]?.contentHash}`,
+  //   context: toMessages[0]?.contentHash
+  // })
 
-  const messages = messagesByChat[selectedChat] || [];
+  useEffect(() => {
+    (async () => {
+      if(selectedChat) {
+        const data = await getPrivateMessages(selectedChat && allUser?.find(u => u.address === selectedChat)?.address as string)
+        if(data) {
+          // @ts-expect-error hrm
+          setToMessages(data)
+        }else {
+          console.log("No messages found")
+        }
+      }
+    })()
+  }, [selectedChat, allUser])
 
-  const handleSendMessage = () => {
+  if(!allUser) return (
+    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <CircularProgress size={30} />
+    </Box>
+  );
+
+  const handleSendMessage = async () => {
     if (message.trim()) {
       const newMessage = {
-        id: messages.length + 1,
-        text: message,
-        sender: 'me',
-        timestamp: new Date(),
+        contentHash: message,
+        to: selectedChat && allUser.find(u => u.address === selectedChat)?.address
       };
+      if(newMessage.contentHash) {
+        const data = await uploadMessages(newMessage.contentHash)
+        if(data) {
+          const payload = {
+            to: newMessage.to,
+            contentHash: data
+          }
+          const messageResponse = await sendPrivateMessage(payload.to as string, payload.contentHash as string)
+          if(messageResponse) {
+            console.log("Message sent successfully:", messageResponse);
+            toast.success(`${messageResponse.status}`)
+          } else {
+            console.error("Failed to send message");
+          }
+        }
+      }
 
-      setMessagesByChat({
-        ...messagesByChat,
-        [selectedChat]: [...messages, newMessage],
-      });
+      // setMessagesByChat({
+      //   ...messagesByChat,
+      //   [selectedChat]: [...messages, newMessage],
+      // });
 
-      setMessage('');
+      // setMessage('');
     }
   };
 
@@ -55,12 +83,12 @@ export const ChatApp = () => {
       <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
         Chats
       </Typography>
-      {chats.map((chat) => (
-        <ListItem key={chat} disablePadding>
+      {allUser.map((chat, index) => (
+        <ListItem key={index} disablePadding>
           <ListItemButton
-            selected={selectedChat === chat}
+            selected={selectedChat === chat.address}
             onClick={() => {
-              setSelectedChat(chat);
+              setSelectedChat(chat.address);
               setDrawerOpen(false);
             }}
             sx={{
@@ -70,12 +98,12 @@ export const ChatApp = () => {
             }}
           >
             <ListItemAvatar>
-              <Avatar sx={{ bgcolor: chat === 'Room' ? 'primary.main' : 'secondary.main' }}>
-                {chat === 'Room' ? <GroupIcon /> : chat[0]}
-              </Avatar>
+              <Avatar 
+               src={`https://ipfs.io/ipfs/${chat.avatarHash}`}
+              />
             </ListItemAvatar>
-            <ListItemText primary={chat} />
-            <Badge badgeContent={messagesByChat[chat]?.length || 0} color="primary" />
+            <ListItemText primary={chat.username} />
+            {/* <Badge badgeContent={messagesByChat[chat.]?.length || 0} color="primary" /> */}
           </ListItemButton>
         </ListItem>
       ))}
@@ -100,7 +128,6 @@ export const ChatApp = () => {
         <ChatList />
       </Drawer>
 
-      {/* Chat Area */}
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <AppBar position="static" color="default" elevation={1}>
           <Toolbar>
@@ -111,7 +138,7 @@ export const ChatApp = () => {
             )}
             <Stack direction="row" width={"100%"} alignItems="center" justifyContent="space-between" mb={2}>
               <Typography variant="h6" sx={{ flexGrow: 1 }}>
-                {selectedChat}
+                {selectedChat ? allUser.find(u => u.address === selectedChat)?.username || 'Room' : 'Select a chat'}
               </Typography>
               <ConnectButton />
             </Stack>
@@ -120,9 +147,10 @@ export const ChatApp = () => {
 
         {/* Chat Messages */}
         <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-          {messages.map((msg) => (
+          {toMessages.map((msg) => {
+            return (
             <Box
-              key={msg.id}
+              key={msg.to}
               sx={{
                 display: 'flex',
                 justifyContent: msg.sender === 'me' ? 'flex-end' : 'flex-start',
@@ -131,7 +159,7 @@ export const ChatApp = () => {
             >
               {msg.sender === 'system' ? (
                 <Alert severity="info" sx={{ width: '100%' }}>
-                  {msg.text}
+                  {`https://ipfs.io/ipfs/${msg.contentHash}`}
                 </Alert>
               ) : (
                 <Paper
@@ -139,32 +167,31 @@ export const ChatApp = () => {
                   sx={{
                     p: 2,
                     maxWidth: '70%',
-                    backgroundColor: msg.sender === 'me' ? 'primary.main' : 'grey.800',
+                    backgroundColor: msg.from === 'me' ? 'primary.main' : 'grey.800',
                     color: 'white',
                     borderRadius: 2,
                   }}
                 >
-                  <Typography variant="body1">{msg.text}</Typography>
-                  <Typography variant="caption" sx={{ opacity: 0.7, display: 'block', mt: 1 }}>
-                    {msg.timestamp.toLocaleTimeString()}
-                  </Typography>
+                  <IPFSMessage 
+                   contentHash={msg.contentHash}
+                  />
                 </Paper>
               )}
             </Box>
-          ))}
+          )})}
         </Box>
 
-        {/* Input Box */}
         <Paper elevation={3} sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
           <Box sx={{ display: 'flex', gap: 1 }}>
             <TextField
               fullWidth
-              placeholder={`Message ${selectedChat}...`}
+              placeholder={allUser.length > 0 ? `Message ${allUser.find(u => u.address === selectedChat)?.username}...` : "There is no one to message now"}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
               variant="outlined"
               size="small"
+              disabled={allUser.find(u => u.address === selectedChat)?.username === undefined}
             />
             <IconButton
               color="primary"

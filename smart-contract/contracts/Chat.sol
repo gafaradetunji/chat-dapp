@@ -26,10 +26,13 @@ contract ChatDapp {
     error EmptyMessage();
 
     mapping(address => User) public users;
-    mapping(string => address) public usernameToAddress; // Key is "username.zest"
+    mapping(string => address) public usernameToAddress;
     mapping(address => mapping(address => Message[])) private privateMessages;
     Message[] private groupMessages;
     mapping(address => Message[]) private userGroupMessages;
+
+    address[] private registeredUsers;
+    uint256 public totalUsers;
 
     event UserRegistered(
         address indexed user,
@@ -57,12 +60,12 @@ contract ChatDapp {
 
         string memory ensName = createEnsName(rawUsername);
 
-        if (usernameToAddress[ensName] != address(0)) {
+        if (usernameToAddress[ensName] != address(0))
             revert UsernameAlreadyExists(ensName);
-        }
-        if (bytes(users[msg.sender].username).length != 0) {
+        if (bytes(users[msg.sender].username).length != 0)
             revert UserAlreadyRegistered(msg.sender);
-        }
+        if (users[msg.sender].owner != address(0))
+            revert UserAlreadyRegistered(msg.sender);
 
         users[msg.sender] = User({
             username: ensName,
@@ -72,6 +75,9 @@ contract ChatDapp {
         });
 
         usernameToAddress[ensName] = msg.sender;
+
+        registeredUsers.push(msg.sender);
+        totalUsers++;
 
         emit UserRegistered(msg.sender, ensName, avatarHash);
     }
@@ -96,6 +102,18 @@ contract ChatDapp {
     ) external view returns (address) {
         string memory ensName = createEnsName(rawUsername);
         return usernameToAddress[ensName];
+    }
+
+    function getTotalUsers() external view returns (uint256) {
+        return totalUsers;
+    }
+
+    function getAllUserAddresses() external view returns (address[] memory) {
+        return registeredUsers;
+    }
+
+    function isUserRegistered(address userAddr) external view returns (bool) {
+        return bytes(users[userAddr].username).length != 0;
     }
 
     function sendPrivateMessage(
@@ -128,16 +146,10 @@ contract ChatDapp {
     function getPrivateMessages(
         address withUser
     ) external view returns (Message[] memory) {
-        if (bytes(users[msg.sender].username).length == 0) {
-            revert NotRegistered(msg.sender);
-        }
         return privateMessages[msg.sender][withUser];
     }
 
     function sendGroupMessage(string calldata contentHash) external {
-        if (bytes(users[msg.sender].username).length == 0) {
-            revert NotRegistered(msg.sender);
-        }
         if (bytes(contentHash).length == 0) {
             revert EmptyMessage();
         }
@@ -161,9 +173,6 @@ contract ChatDapp {
     function getUserGroupMessages(
         address user
     ) external view returns (Message[] memory) {
-        if (bytes(users[user].username).length == 0) {
-            revert UserNotFound(user);
-        }
         return userGroupMessages[user];
     }
 

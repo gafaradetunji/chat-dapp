@@ -25,17 +25,6 @@ export const useRegisterUser = () => {
       }
 
       try {
-        // const contractCode = await publicClient.getBytecode({
-        //   address: process.env["NEXT_PUBLIC_CONTRACT_ADDRESS"] as `0x${string}`,
-        // });
-        
-        // if (!contractCode) {
-        //   toast.error("Contract not found", {
-        //     description: "The contract address appears to be invalid",
-        //   });
-        //   return;
-        // }
-
         const simulationResult = await publicClient.simulateContract({
           account: address,
           address: process.env["NEXT_PUBLIC_CONTRACT_ADDRESS"] as `0x${string}`,

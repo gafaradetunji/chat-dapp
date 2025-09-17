@@ -155,6 +155,19 @@ export const chatAbi = [
 	},
 	{
 		"inputs": [],
+		"name": "getAllUserAddresses",
+		"outputs": [
+			{
+				"internalType": "address[]",
+				"name": "",
+				"type": "address[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
 		"name": "getGroupMessages",
 		"outputs": [
 			{
@@ -224,6 +237,19 @@ export const chatAbi = [
 				"internalType": "struct ChatDapp.Message[]",
 				"name": "",
 				"type": "tuple[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getTotalUsers",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
 			}
 		],
 		"stateMutability": "view",
@@ -314,6 +340,25 @@ export const chatAbi = [
 	{
 		"inputs": [
 			{
+				"internalType": "address",
+				"name": "userAddr",
+				"type": "address"
+			}
+		],
+		"name": "isUserRegistered",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
 				"internalType": "string",
 				"name": "rawUsername",
 				"type": "string"
@@ -377,6 +422,19 @@ export const chatAbi = [
 		"name": "sendPrivateMessage",
 		"outputs": [],
 		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "totalUsers",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
 		"type": "function"
 	},
 	{
@@ -445,4 +503,29 @@ export const chatAbi = [
 		"stateMutability": "view",
 		"type": "function"
 	}
+]
+
+export const multicallAbi = [
+  {"inputs":[
+    {"components":[
+      {
+        "internalType":"address","name":"target","type":"address"
+      },
+      {
+        "internalType":"bytes","name":"callData","type":"bytes"
+      }
+    ],
+    "internalType":"struct Multicall.Call[]","name":"calls","type":"tuple[]"
+  }
+],
+"name":"aggregate","outputs":[
+  {
+    "internalType":"uint256","name":"blockNumber","type":"uint256"
+  },
+  {
+    "internalType":"bytes[]","name":"returnData","type":"bytes[]"
+  }
+],
+"stateMutability":"nonpayable","type":"function"
+}
 ]

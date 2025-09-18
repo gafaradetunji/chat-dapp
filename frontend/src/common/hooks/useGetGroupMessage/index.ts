@@ -3,22 +3,20 @@ import { useCallback } from "react"
 import { toast } from "sonner";
 import { useAccount } from "wagmi"
 
-export const useGetPrivateMessages = () => {
+export const useGetGroupMessages = () => {
   const { address } = useAccount();
-  const getPrivateMessages = useCallback( async (addr: string) => { 
+  const getGroupMessages = useCallback( async () => { 
     if(!address) {
       toast.error("please connect your wallet")
     }
-    console.log("To Address::", addr)
     const getMessages = await publicClient.readContract({
       address: chatContract.address as `0x${string}`,
       abi: chatContract.abi,
-      functionName: "getPrivateMessages",
-      args: [addr],
+      functionName: "getGroupMessages",
       account: address
     })
     return getMessages;
   }, [address])
 
-  return { getPrivateMessages };
+  return { getGroupMessages };
 }

@@ -5,9 +5,19 @@ import { ArrowForward, Public, Security, Speed, Star, TrendingUp } from "@mui/ic
 import { Avatar, Box, Button, Card, CardContent, Grid, Stack, Typography } from "@mui/material";
 import { ProfileForm } from "./ui/component";
 import { useState } from "react";
+import { useAccount } from "wagmi";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 export function HomePage() {
   const [open, setOpen] = useState<boolean>(false)
+  const { isConnected } = useAccount();
+  const router = useRouter();
+
+  const handleRegisterUser = async () => {
+    if(!isConnected) return toast.error("Please connect your wallet");
+    setOpen(true)
+  } 
 
   return (
     <LandingLayout>
@@ -37,24 +47,45 @@ export function HomePage() {
             Experience the future of messaging with Web3 integration.
           </Typography>
           <Stack direction="row" spacing={2}>
-            <Button
-              variant="contained"
-              size="large"
-              endIcon={<ArrowForward />}
-              sx={{
-                py: 2,
-                px: 4,
-                background: 'linear-gradient(45deg, #FE6B8B 30%, #FF8E53 90%)',
-                boxShadow: '0 3px 5px 2px rgba(255, 105, 135, .3)',
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 5px 10px 2px rgba(255, 105, 135, .3)',
-                }
-              }}
-              onClick={() => setOpen(true)}
-            >
-              Get Started
-            </Button>
+            {isConnected ? (
+              <Button
+                variant="contained"
+                size="large"
+                endIcon={<ArrowForward />}
+                sx={{
+                  py: 2,
+                  px: 4,
+                  background: 'linear-gradient(45deg, #FE6B8B 30%, #FF8E53 90%)',
+                  boxShadow: '0 3px 5px 2px rgba(255, 105, 135, .3)',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 5px 10px 2px rgba(255, 105, 135, .3)',
+                  }
+                }}
+                onClick={() => router.push('/chat')}
+              >
+                Go to Chat
+              </Button>
+            ): (
+              <Button
+                variant="contained"
+                size="large"
+                endIcon={<ArrowForward />}
+                sx={{
+                  py: 2,
+                  px: 4,
+                  background: 'linear-gradient(45deg, #FE6B8B 30%, #FF8E53 90%)',
+                  boxShadow: '0 3px 5px 2px rgba(255, 105, 135, .3)',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 5px 10px 2px rgba(255, 105, 135, .3)',
+                  }
+                }}
+                onClick={handleRegisterUser}
+              >
+                Get Started
+              </Button>
+            )}
           </Stack>
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>

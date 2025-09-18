@@ -3,12 +3,12 @@ import { useCallback } from "react"
 import { toast } from "sonner";
 import { useAccount, useWatchContractEvent, useWriteContract } from "wagmi"
 
-export const useSendPrivateMessages = () => {
+export const useSendGroupMessages = () => {
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
 
 
-  const sendPrivateMessage = useCallback( async (to: string, contentHash: string) => { 
+  const sendGroupMessage = useCallback( async (contentHash: string) => { 
     if (!address) {
       toast.error("Not connected", {
         description: "Kindly connect your wallet",
@@ -20,20 +20,16 @@ export const useSendPrivateMessages = () => {
         account: address,
         address: process.env["NEXT_PUBLIC_CONTRACT_ADDRESS"] as `0x${string}`,
         abi: chatAbi,
-        functionName: "sendPrivateMessage",
-        args: [to, contentHash],
+        functionName: "sendGroupMessage",
+        args: [contentHash],
       });
-
-      // console.log("Simulation Result:", simulationResult);
 
       const txHash = await writeContractAsync({
         address: process.env["NEXT_PUBLIC_CONTRACT_ADDRESS"] as `0x${string}`,
         abi: chatAbi,
-        functionName: "sendPrivateMessage",
-        args: [to, contentHash],
+        functionName: "sendGroupMessage",
+        args: [contentHash],
       });
-
-      // console.log("Transaction Hash:", txHash);
 
       const txReceipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
@@ -55,27 +51,24 @@ export const useSendPrivateMessages = () => {
     }
   }, [address, writeContractAsync])
 
-  return { sendPrivateMessage };
+  return { sendGroupMessage };
 }
-// @ts-nocheck
-export const useWatchPrivateMessages = (onMessageReceived?: (logs: any[]) => void) => {
-  const { address } = useAccount();
-
+export const useWatchGroupMessages = (onMessageReceived?: (logs: any[]) => void) => {
   useWatchContractEvent({
     abi: chatAbi,
     address: process.env["NEXT_PUBLIC_CONTRACT_ADDRESS"] as `0x${string}`,
-    eventName: "PrivateMessageSent",
+    eventName: "GroupMessageSent",
     onLogs: (logs) => {
-      const relevantLogs = logs.filter((log) => {
+      console.log("New group message events:", logs);
+      
+      const processedLogs = logs.map(log => ({
         // @ts-expect-error hrm
-        const { from, to } = log.args as { from: string; to: string };
-        return from?.toLowerCase() === address?.toLowerCase() || 
-          to?.toLowerCase() === address?.toLowerCase();
-      });
+        ...log.args,
+      }));
 
-      if (relevantLogs.length > 0) {
-        // console.log("New messages for current user:", relevantLogs);
-        onMessageReceived?.(relevantLogs);
+      if (processedLogs.length > 0) {
+        console.log("Processed group message logs:", processedLogs);
+        onMessageReceived?.(processedLogs);
       }
     },
   });

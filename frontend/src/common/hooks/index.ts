@@ -6,3 +6,5 @@ export * from "./useGetPrivateMessages";
 export * from "./useSendGroupMessages";
 export * from "./useGetGroupMessage";
 export * from "./useGetUser";
+// export * from "./useWatchChainLinkPriceFeeds";
+export * from './useGetPastEvents';

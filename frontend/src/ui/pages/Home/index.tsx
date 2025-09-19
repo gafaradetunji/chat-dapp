@@ -47,7 +47,7 @@ export function HomePage() {
             Experience the future of messaging with Web3 integration.
           </Typography>
           <Stack direction="row" spacing={2}>
-            {isConnected ? (
+            {/* {isConnected ? (
               <Button
                 variant="contained"
                 size="large"
@@ -66,7 +66,7 @@ export function HomePage() {
               >
                 Go to Chat
               </Button>
-            ): (
+            ): ( */}
               <Button
                 variant="contained"
                 size="large"
@@ -85,7 +85,7 @@ export function HomePage() {
               >
                 Get Started
               </Button>
-            )}
+            {/* )} */}
           </Stack>
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>

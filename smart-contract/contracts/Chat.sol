@@ -1,7 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-contract ChatDapp {
+import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import "@chainlink/contracts/src/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
+
+contract ChatDapp is AutomationCompatibleInterface {
+    AggregatorV3Interface internal btcToUsdDataFeed;
+    AggregatorV3Interface internal ethToUsdDataFeed;
+    AggregatorV3Interface internal btcToEthDataFeed;
+
+    uint256 public lastTimeStamp;
+    uint256 public interval;
+
+    int256 public lastBtcUsd;
+    int256 public lastEthUsd;
+    int256 public lastBtcEth;
+
     string private constant SUFFIX_STRING = ".zest";
 
     struct User {
@@ -51,6 +65,27 @@ contract ChatDapp {
         string contentHash,
         uint256 timestamp
     );
+    event PricePosted(
+        int256 btcUsd,
+        int256 ethUsd,
+        int256 btcEth,
+        uint256 timestamp
+    );
+
+    constructor(uint256 updateInterval) {
+        btcToUsdDataFeed = AggregatorV3Interface(
+            0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43
+        );
+        ethToUsdDataFeed = AggregatorV3Interface(
+            0x694AA1769357215DE4FAC081bf1f309aDC325306
+        );
+        btcToEthDataFeed = AggregatorV3Interface(
+            0x5fb1616F78dA7aFC9FF79e0371741a747D2a7F22
+        );
+
+        interval = updateInterval;
+        lastTimeStamp = block.timestamp;
+    }
 
     function register(
         string calldata rawUsername,
@@ -75,7 +110,6 @@ contract ChatDapp {
         });
 
         usernameToAddress[ensName] = msg.sender;
-
         registeredUsers.push(msg.sender);
         totalUsers++;
 
@@ -83,17 +117,15 @@ contract ChatDapp {
     }
 
     function updateAvatar(string calldata newAvatarHash) external {
-        if (bytes(users[msg.sender].username).length == 0) {
+        if (bytes(users[msg.sender].username).length == 0)
             revert UserNotFound(msg.sender);
-        }
         users[msg.sender].avatarHash = newAvatarHash;
         emit AvatarUpdated(msg.sender, newAvatarHash);
     }
 
     function getUser(address userAddr) external view returns (User memory) {
-        if (bytes(users[userAddr].username).length == 0) {
+        if (bytes(users[userAddr].username).length == 0)
             revert UserNotFound(userAddr);
-        }
         return users[userAddr];
     }
 
@@ -120,15 +152,10 @@ contract ChatDapp {
         address to,
         string calldata contentHash
     ) external {
-        if (bytes(users[msg.sender].username).length == 0) {
+        if (bytes(users[msg.sender].username).length == 0)
             revert NotRegistered(msg.sender);
-        }
-        if (bytes(users[to].username).length == 0) {
-            revert UserNotFound(to);
-        }
-        if (bytes(contentHash).length == 0) {
-            revert EmptyMessage();
-        }
+        if (bytes(users[to].username).length == 0) revert UserNotFound(to);
+        if (bytes(contentHash).length == 0) revert EmptyMessage();
 
         Message memory newMessage = Message({
             from: msg.sender,
@@ -150,9 +177,7 @@ contract ChatDapp {
     }
 
     function sendGroupMessage(string calldata contentHash) external {
-        if (bytes(contentHash).length == 0) {
-            revert EmptyMessage();
-        }
+        if (bytes(contentHash).length == 0) revert EmptyMessage();
 
         Message memory newMessage = Message({
             from: msg.sender,
@@ -180,5 +205,34 @@ contract ChatDapp {
         string memory name
     ) internal pure returns (string memory) {
         return string(abi.encodePacked(name, SUFFIX_STRING));
+    }
+
+    function checkUpkeep(
+        bytes calldata
+    )
+        external
+        view
+        override
+        returns (bool upkeepNeeded, bytes memory performData)
+    {
+        upkeepNeeded = (block.timestamp - lastTimeStamp) > interval;
+        performData = "";
+        return (upkeepNeeded, performData);
+    }
+
+    function performUpkeep(bytes calldata) external override {
+        if ((block.timestamp - lastTimeStamp) > interval) {
+            lastTimeStamp = block.timestamp;
+
+            (, int256 btcPrice, , , ) = btcToUsdDataFeed.latestRoundData();
+            (, int256 ethPrice, , , ) = ethToUsdDataFeed.latestRoundData();
+            (, int256 btcEthPrice, , , ) = btcToEthDataFeed.latestRoundData();
+
+            lastBtcUsd = btcPrice;
+            lastEthUsd = ethPrice;
+            lastBtcEth = btcEthPrice;
+
+            emit PricePosted(btcPrice, ethPrice, btcEthPrice, block.timestamp);
+        }
     }
 }

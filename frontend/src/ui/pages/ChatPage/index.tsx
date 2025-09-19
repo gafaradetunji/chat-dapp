@@ -1,5 +1,5 @@
 "use client"
-import { useGetGroupMessages, useGetPrivateMessages, useGetUsers, useSendGroupMessages, useSendPrivateMessages, useUploadMessages, useWatchPrivateMessages } from "@/common";
+import { useGetGroupMessages, useGetPastEvents, useGetPrivateMessages, useGetUsers, useSendGroupMessages, useSendPrivateMessages, useUploadMessages, useWatchPrivateMessages } from "@/common";
 import { Group, Menu as MenuIcon, Person, Send } from "@mui/icons-material";
 import { Alert, AppBar, Avatar, Box, CircularProgress, Drawer, IconButton, List, ListItem, ListItemAvatar, ListItemButton, ListItemText, Paper, Stack, Tab, Tabs, TextField, Toolbar, Typography, useMediaQuery } from "@mui/material";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
@@ -7,7 +7,6 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { IPFSMessage } from "./ui/component";
 import { useAccount } from "wagmi";
-import { redirect } from "next/navigation";
 
 const dummyGroups = [
   {
@@ -19,50 +18,84 @@ const dummyGroups = [
 
 export const ChatApp = () => {
   const allUser = useGetUsers();
-  const { address, isConnected } = useAccount();
+  const { address } = useAccount();
   const [selectedChat, setSelectedChat] = useState('Room');
   const [message, setMessage] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const isMobile = useMediaQuery('(max-width:600px)');
-  const { uploadMessages } = useUploadMessages()
-  const { sendPrivateMessage } = useSendPrivateMessages()
-  const { getPrivateMessages } = useGetPrivateMessages()
-  const { sendGroupMessage } = useSendGroupMessages()
-  const { getGroupMessages } = useGetGroupMessages()
-  // @ts-ignore
+  
+  const { uploadMessages } = useUploadMessages();
+  const { sendPrivateMessage } = useSendPrivateMessages();
+  const { getPrivateMessages } = useGetPrivateMessages();
+  const { sendGroupMessage } = useSendGroupMessages();
+  const { getGroupMessages } = useGetGroupMessages();
+  
   const [toMessages, setToMessages] = useState<any[]>([]);
-  // @ts-ignore
   const [groupMessages, setGroupMessages] = useState<any[]>([]);
 
-  useEffect(() => {
-    (async () => {
-      if(selectedChat && activeTab === 0) {
-        const data = await getPrivateMessages(selectedChat && allUser?.find(u => u.address === selectedChat)?.address as string)
-        if(data) {
-          // @ts-expect-error hrm
-          setToMessages(data)
-        } else {
-          console.log("No messages found")
-        }
-      } else if (activeTab === 1 && selectedChat) {
+  const refreshGroupMessages = useCallback(async () => {
+    if (activeTab === 1) {
+      try {
         const data = await getGroupMessages();
-        if(data) {
-          // @ts-expect-error hrm
+        if (data) {
+          // @ts-ignore
           setGroupMessages(data);
         }
+      } catch (error) {
+        console.error("Error refreshing group messages:", error);
       }
-    })()
-  }, [selectedChat, allUser, activeTab])
+    }
+  }, [activeTab, getGroupMessages]);
+
+  const { events, isProcessing } = useGetPastEvents({
+    uploadMessages: activeTab === 1 ? uploadMessages : undefined,
+    sendGroupMessage: activeTab === 1 ? sendGroupMessage : undefined, 
+    onEventProcessed: useCallback(() => {
+      if (activeTab === 1) {
+        setTimeout(() => refreshGroupMessages(), 2000);
+      }
+      toast.success("New price update shared with group!");
+    }, [activeTab, refreshGroupMessages])
+  });
+
+  useEffect(() => {
+    const fetchMessages = async () => {
+      try {
+        if (selectedChat && activeTab === 0) {
+          const targetUser = allUser?.find(u => u.address === selectedChat);
+          if (targetUser) {
+            const data = await getPrivateMessages(targetUser.address);
+            if (data) {
+              // @ts-expect-error hrm
+              setToMessages(data);
+            } else {
+              console.log("No private messages found");
+            }
+          }
+        } else if (activeTab === 1 && selectedChat) {
+          await refreshGroupMessages();
+        }
+      } catch (error) {
+        console.error("Error fetching messages:", error);
+      }
+    };
+
+    fetchMessages();
+  }, [selectedChat, allUser, activeTab, getPrivateMessages, refreshGroupMessages]);
 
   const refreshMessages = useCallback(async () => {
-    if(selectedChat && allUser && activeTab === 0) {
+    if (selectedChat && allUser && activeTab === 0) {
       const targetUser = allUser.find(u => u.address === selectedChat);
       if (targetUser) {
-        const data = await getPrivateMessages(targetUser.address);
-        if(data) {
-          // @ts-expect-error hrm
-          setToMessages(data);
+        try {
+          const data = await getPrivateMessages(targetUser.address);
+          if (data) {
+            // @ts-expect-error hrm
+            setToMessages(data);
+          }
+        } catch (error) {
+          console.error("Error refreshing private messages:", error);
         }
       }
     }
@@ -81,9 +114,7 @@ export const ChatApp = () => {
     }
   }, [refreshMessages, activeTab]);
 
-  if(!isConnected) return redirect('/')
-
-  if(!allUser) return (
+  if (!allUser) return (
     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
       <CircularProgress size={30} />
     </Box>
@@ -91,43 +122,44 @@ export const ChatApp = () => {
 
   const handleSendMessage = async () => {
     if (message.trim()) {
-      if (activeTab === 0) {
-        const newMessage = {
-          contentHash: message,
-          to: selectedChat && allUser.find(u => u.address === selectedChat)?.address
-        };
-        if(newMessage.contentHash) {
-          const data = await uploadMessages(newMessage.contentHash)
-          if(data) {
-            const payload = {
-              to: newMessage.to,
-              contentHash: data
-            }
-            const messageResponse = await sendPrivateMessage(payload.to as string, payload.contentHash as string)
-            if(messageResponse) {
-              toast.success("Message sent successfully");
-              setMessage('');
-            } else {
-              console.error("Failed to send message");
+      try {
+        if (activeTab === 0) {
+          const newMessage = {
+            contentHash: message,
+            to: selectedChat && allUser.find(u => u.address === selectedChat)?.address
+          };
+          if (newMessage.contentHash && newMessage.to) {
+            const data = await uploadMessages(newMessage.contentHash);
+            if (data) {
+              const messageResponse = await sendPrivateMessage(newMessage.to, data);
+              if (messageResponse) {
+                toast.success("Message sent successfully");
+                setMessage('');
+              } else {
+                toast.error("Failed to send message");
+              }
             }
           }
-        }
-      } else {
-        const data = await uploadMessages(message);
-          if(data) {
+        } else {
+          const data = await uploadMessages(message);
+          if (data) {
             const messageResponse = await sendGroupMessage(data);
-            if(messageResponse) {
+            if (messageResponse) {
               toast.success("Group message sent successfully");
               setMessage('');
             } else {
-              console.error("Failed to send group message");
+              toast.error("Failed to send group message");
             }
+          }
         }
+      } catch (error) {
+        console.error("Error sending message:", error);
+        toast.error("Failed to send message");
       }
     }
   };
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
     setSelectedChat(newValue === 0 ? (allUser[0]?.address || 'Room') : 'general');
   };
@@ -154,7 +186,7 @@ export const ChatApp = () => {
           >
             <ListItemAvatar>
               <Avatar 
-               src={`https://ipfs.io/ipfs/${chat.avatarHash}`}
+                src={`https://ipfs.io/ipfs/${chat.avatarHash}`}
               />
             </ListItemAvatar>
             <ListItemText 
@@ -245,6 +277,18 @@ export const ChatApp = () => {
     return false;
   };
 
+  // Event processing indicator
+  const EventProcessingIndicator = () => (
+    isProcessing && activeTab === 1 && (
+      <Alert severity="info" sx={{ mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <CircularProgress size={16} />
+          Processing new price event...
+        </Box>
+      </Alert>
+    )
+  );
+
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
       {/* Sidebar */}
@@ -277,11 +321,6 @@ export const ChatApp = () => {
                 <Typography variant="h6" sx={{ flexGrow: 1 }}>
                   {getCurrentChatName()}
                 </Typography>
-                {/* {activeTab === 1 && selectedChat && (
-                  <Typography variant="caption" color="text.secondary">
-                    {dummyGroups.find(g => g.id === selectedChat)?.memberCount} members
-                  </Typography>
-                )} */}
               </Box>
               <ConnectButton />
             </Stack>
@@ -289,52 +328,60 @@ export const ChatApp = () => {
         </AppBar>
 
         <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+          {/* Event processing indicator */}
+          <EventProcessingIndicator />
+          
           {getCurrentMessages().map((msg) => {
             return (
-            <Box
-              key={msg.timestamp || msg.id}
-              sx={{
-                display: 'flex',
-                justifyContent: (activeTab === 0 ? msg.from === address : msg.from === address) ? 'flex-end' : 'flex-start',
-                mb: 2,
-              }}
-            >
-              {msg.from === 'system' ? (
-                <Alert severity="info" sx={{ width: '100%' }}>
-                  {activeTab === 0 ? `https://ipfs.io/ipfs/${msg.contentHash}` : msg.contentHash}
-                </Alert>
-              ) : (
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, maxWidth: '70%' }}>
-                  {activeTab === 1 && msg.from !== address && (
-                    <Avatar 
-                      src={`https://ipfs.io/ipfs/${msg.avatar}`}
-                      sx={{ width: 32, height: 32 }}
-                    />
-                  )}
-                  <Box>
+              <Box
+                key={msg.timestamp || msg.id}
+                sx={{
+                  display: 'flex',
+                  justifyContent: (activeTab === 0 ? msg.from === address : msg.from === address) ? 'flex-end' : 'flex-start',
+                  mb: 2,
+                }}
+              >
+                {msg.from === 'system' ? (
+                  <Alert severity="info" sx={{ width: '100%' }}>
+                    {activeTab === 0 ? `https://ipfs.io/ipfs/${msg.contentHash}` : msg.contentHash}
+                  </Alert>
+                ) : (
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, maxWidth: '70%' }}>
                     {activeTab === 1 && msg.from !== address && (
-                      <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                        {msg.username}
-                      </Typography>
-                    )}
-                    <Paper
-                      elevation={2}
-                      sx={{
-                        p: 2,
-                        backgroundColor: (activeTab === 0 ? msg.from === address : msg.from === address) ? 'primary.main' : 'grey.800',
-                        color: 'white',
-                        borderRadius: 2,
-                      }}
-                    >
-                      <IPFSMessage 
-                       contentHash={msg.contentHash}
+                      <Avatar 
+                        src={`https://ipfs.io/ipfs/${msg.avatar}`}
+                        sx={{ width: 32, height: 32 }}
                       />
-                    </Paper>
+                    )}
+                    <Box>
+                      {activeTab === 1 && msg.from !== address && (
+                        <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                          {msg.username || 'Price Bot'}
+                        </Typography>
+                      )}
+                      <Paper
+                        elevation={2}
+                        sx={{
+                          p: 2,
+                          backgroundColor: (activeTab === 0 ? msg.from === address : msg.from === address) 
+                            ? 'primary.main' 
+                            : msg.username === 'Price Bot' 
+                              ? 'success.main' 
+                              : 'grey.800',
+                          color: 'white',
+                          borderRadius: 2,
+                        }}
+                      >
+                        <IPFSMessage 
+                          contentHash={msg.contentHash}
+                        />
+                      </Paper>
+                    </Box>
                   </Box>
-                </Box>
-              )}
-            </Box>
-          )})}
+                )}
+              </Box>
+            )
+          })}
         </Box>
 
         <Paper elevation={3} sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
